@@ -8,6 +8,9 @@ import os
 import sys
 import math
 import time
+import random
+import backoff
+import cloudscraper
 import requests
 from PIL import Image, ImageDraw, ImageFont
 import argparse
@@ -17,9 +20,32 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class CityLookup:
     def __init__(self):
+
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0",
+            "Accept": "text/css",
+        }
+        
+        self.retries = 8
+        self.timeout = 10
+
         self.session = requests.Session()
+        
+        self.scraper = cloudscraper.create_scraper(
+            interpreter="nodejs",
+            sess=self.session,
+            delay=10,
+            browser={
+                "browser": "chrome",
+                "platform": "windows",
+                "desktop": True,
+            },
+
+        )
+        
         self.session.headers.update({
-            'User-Agent': 'MeshtasticTileGenerator/1.0'
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0",
+            "Accept": "text/css",
         })
     
     def get_coordinates(self, city, state=None, country=None):
@@ -41,21 +67,166 @@ class CityLookup:
         }
         
         try:
-            response = self.session.get(base_url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
             
-            if not data:
-                return None
+            for attempt in range(self.retries):
+                # Randomized delay before the request
+                delay = random.uniform(0.1, 0.7)  # Random delay between 0.1 and 0.7 seconds
+                time.sleep(delay)
+                
+                wait_time = 4 ** attempt  # Exponential backoff
+                
+                try:
+                    # Define the response using the passed-in url and the global headers variable
+                    response = self.scraper.get(base_url, params=params, headers=self.headers, timeout=self.timeout)
+
+                    if response.status_code == 400:
+                        # Log 400 errors and return response directly
+                        print(f"ERROR: 400 Bad Request: {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+
+                    if response.status_code == 401:
+                        # Log 401 errors and return response directly
+                        print(f"ERROR: 401 Unauthorized: {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+
+                    if response.status_code == 403:
+                        # Log 403 errors and return response directly
+                        print(f"ERROR:403 Forbidden: {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
             
-            result = data[0]
-            return {
-                'name': result.get('display_name', 'Unknown'),
-                'lat': float(result['lat']),
-                'lon': float(result['lon']),
-                'type': result.get('type', 'unknown')
-            }
-            
+                    if response.status_code == 404:
+                        # Log 404 errors and return response directly
+                        print(f"ERROR: 404 Not Found: {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+
+                    if response.status_code == 405:
+                        # Log 405 errors and return response directly
+                        print(f"ERROR: 405 Method Not Allowed: {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+
+                    if response.status_code == 406:
+                        # Log 406 errors and return response directly
+                        print(f"ERROR: 406 Not Acceptable: {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+
+                    if response.status_code == 407:
+                        # Log 407 errors and return response directly
+                        print(f"ERROR: 407 Proxy Authentication Required: {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+                        
+                    if response.status_code == 408:
+                        # Log 408 errors and return response directly
+                        print(f"ERROR: 408 Request Timeout: {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        time.sleep(4 ** attempt)  # Exponential backoff
+
+                    if response.status_code == 501:
+                        # Log 501 errors and raise exception
+                        print(f"ERROR: 501 Internal Server Error): {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+
+                    if response.status_code == 502:
+                        # Log 502 errors and raise exception
+                        print(f"ERROR: 502 Bad Gateway): {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        
+                    if response.status_code == 503:
+                        # Log 503 errors and raise exception
+                        print(f"ERROR: 503 Service Unavailable): {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                    
+                    if response.status_code == 504:
+                        # Log 504 errors and raise exception
+                        print(f"ERROR: 504 Gateway Timeout): {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                    
+                    if response.status_code == 505:
+                        # Log 505 errors and raise exception
+                        print(f"ERROR: 505 HTTP Version Not Supported): {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                    
+                    if response.status_code == 510:
+                        # Log 510 errors and raise exception
+                        print(f"ERROR: 510 Not Extended): {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                    
+                    if response.status_code == 511:
+                        # Log 511 errors and raise exception
+                        print(f"ERROR: 511 Network Authentication Required): {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+
+                    if response.status_code == 11004:
+                        # Log 11004 errors and return response directly
+                        print(f"11004 Error: {base_url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+
+                    if response.status_code == 429:
+                        # Rate limit exceeded, retry with exponential backoff
+                        print(f'Rate limit exceeded. Retrying in {wait_time} seconds...')
+                        time.sleep(wait_time)
+
+                    else:
+                        response.raise_for_status()  # Raise an error for other bad responses
+
+                    #response = self.session.get(base_url, params=params, timeout=10)
+                    #response.raise_for_status()
+
+                        data = response.json()
+                        
+                        if not data:
+                            print(f"ERROR: NO DATA")
+                            return None
+
+                        result = data[0]
+
+                        return {
+                            'name': result.get('display_name', 'Unknown'),
+                            'lat': float(result['lat']),
+                            'lon': float(result['lon']),
+                            'type': result.get('type', 'unknown')
+                        }
+
+                except cloudscraper.exceptions.CloudflareChallengeError as e:
+                    print(f"Cloudflare challenge encountered: {e}")
+                    if attempt == self.retries - 1:
+                        raise  # Raise exception if retries are exhausted
+                    time.sleep(4 ** attempt)  # Exponential backoff
+                except (requests.RequestException, OSError, ConnectionError) as e:
+                    # Catching all network-related errors including DNS resolution issues
+                    print(f"ERROR making request to {base_url}: {e}")
+                    if attempt == self.retries - 1:
+                        raise  # Raise exception if retries are exhausted
+                    time.sleep(4 ** attempt)  # Exponential backoff
+                except Exception as e:
+                    # General exception handler (to capture any other errors)
+                    print(f"Unexpected error encountered: {e}")
+                    if attempt == self.retries - 1:
+                        raise  # Raise exception if retries are exhausted
+                    time.sleep(4 ** attempt)  # Exponential backoff
+
         except Exception as e:
             print(f"Error looking up coordinates for {query}: {e}")
             return None
@@ -114,11 +285,35 @@ class MeshtasticTileGenerator:
     def __init__(self, output_dir="tiles", tile_size=256, delay=0.1):
         self.output_dir = Path(output_dir)
         self.tile_size = tile_size
+
         self.delay = delay  # Delay between requests to be respectful
+        
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0",
+            "Accept": "text/css",
+        }
+        
+        self.retries = 8
+        self.timeout = 10
+
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'MeshtasticTileGenerator/1.0'
-        })
+        
+        self.scraper = cloudscraper.create_scraper(
+            interpreter="nodejs",
+            sess=self.session,
+            delay=10,
+            browser={
+                "browser": "chrome",
+                "platform": "windows",
+                "desktop": True,
+            },
+
+        )
+        
+       # self.session.headers.update({
+       #     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0",
+       #     "Accept": "text/css",
+       # })
         
         # Create output directory
         self.output_dir.mkdir(exist_ok=True)
@@ -151,6 +346,7 @@ class MeshtasticTileGenerator:
     
     def download_tile(self, x, y, zoom, source="osm"):
         """Download a single tile"""
+        
         url = self.get_tile_url(x, y, zoom, source)
         
         # Create directory structure
@@ -162,18 +358,158 @@ class MeshtasticTileGenerator:
         # Skip if tile already exists
         if tile_path.exists():
             return tile_path, True
-        
+
         try:
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
+
+            for attempt in range(self.retries):
+
+                # Randomized delay before the request
+                delay = random.uniform(0.1, 0.7)  # Random delay between 0.1 and 0.7 seconds
+                time.sleep(delay)
+                
+                try:
+
+                    #response = self.session.get(url, timeout=10)
+
+                    # Define the response using the passed-in url and the global headers variable
+                    response = self.scraper.get(url, headers=self.headers, timeout=self.timeout)
+
+                    if response.status_code == 400:
+                        # Log 400 errors and return response directly
+                        print(f"ERROR: 400 Bad Request: {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+
+                    if response.status_code == 401:
+                        # Log 401 errors and return response directly
+                        print(f"ERROR: 401 Unauthorized: {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+
+                    if response.status_code == 403:
+                        # Log 403 errors and return response directly
+                        print(f"ERROR:403 Forbidden: {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
             
-            # Save the tile
-            with open(tile_path, 'wb') as f:
-                f.write(response.content)
-            
-            time.sleep(self.delay)  # Be respectful to tile servers
-            return tile_path, True
-            
+                    if response.status_code == 404:
+                        # Log 404 errors and return response directly
+                        print(f"ERROR: 404 Not Found: {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+
+                    if response.status_code == 405:
+                        # Log 405 errors and return response directly
+                        print(f"ERROR: 405 Method Not Allowed: {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+
+                    if response.status_code == 406:
+                        # Log 406 errors and return response directly
+                        print(f"ERROR: 406 Not Acceptable: {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+
+                    if response.status_code == 407:
+                        # Log 407 errors and return response directly
+                        print(f"ERROR: 407 Proxy Authentication Required: {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        return response
+                        
+                    if response.status_code == 408:
+                        # Log 408 errors and return response directly
+                        print(f"ERROR: 408 Request Timeout: {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        time.sleep(4 ** attempt)  # Exponential backoff
+
+                    if response.status_code == 501:
+                        # Log 501 errors and raise exception
+                        print(f"ERROR: 501 Internal Server Error): {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+
+                    if response.status_code == 502:
+                        # Log 502 errors and raise exception
+                        print(f"ERROR: 502 Bad Gateway): {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                        
+                    if response.status_code == 503:
+                        # Log 503 errors and raise exception
+                        print(f"ERROR: 503 Service Unavailable): {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                    
+                    if response.status_code == 504:
+                        # Log 504 errors and raise exception
+                        print(f"ERROR: 504 Gateway Timeout): {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                    
+                    if response.status_code == 505:
+                        # Log 505 errors and raise exception
+                        print(f"ERROR: 505 HTTP Version Not Supported): {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                    
+                    if response.status_code == 510:
+                        # Log 510 errors and raise exception
+                        print(f"ERROR: 510 Not Extended): {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+                    
+                    if response.status_code == 511:
+                        # Log 511 errors and raise exception
+                        print(f"ERROR: 511 Network Authentication Required): {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+
+                    if response.status_code == 11004:
+                        # Log 11004 errors and return response directly
+                        print(f"11004 Error: {url}")
+                        if attempt == self.retries - 1:
+                            raise  # Raise exception if retries are exhausted
+
+                    if response.status_code == 429:
+                        # Rate limit exceeded, retry with exponential backoff
+                        wait_time = 4 ** attempt  # Exponential backoff
+                        print(f"Rate limit exceeded. Retrying in {wait_time} seconds...")
+
+                    else:
+                        response.raise_for_status()
+                        
+                        # Save the tile
+                        with open(tile_path, 'wb') as f:
+                            f.write(response.content)
+                        
+                        time.sleep(self.delay)  # Be respectful to tile servers
+                        return tile_path, True
+
+                except cloudscraper.exceptions.CloudflareChallengeError as e:
+                    print(f"Cloudflare challenge encountered: {e}")
+                    if attempt == self.retries - 1:
+                        raise  # Raise exception if retries are exhausted
+                    time.sleep(4 ** attempt)  # Exponential backoff
+                except (requests.RequestException, OSError, ConnectionError) as e:
+                    # Catching all network-related errors including DNS resolution issues
+                    print(f"ERROR making request to {url}: {e}")
+                    if attempt == self.retries - 1:
+                        raise  # Raise exception if retries are exhausted
+                    time.sleep(4 ** attempt)  # Exponential backoff
+                except Exception as e:
+                    # General exception handler (to capture any other errors)
+                    print(f"Unexpected error encountered: {e}")
+                    if attempt == self.retries - 1:
+                        raise  # Raise exception if retries are exhausted
+                    time.sleep(4 ** attempt)  # Exponential backoff
         except Exception as e:
             print(f"Error downloading tile {x},{y},{zoom}: {e}")
             return None, False
